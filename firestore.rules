@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 헬퍼 함수
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // 문제 컬렉션
+    match /problems/{problemId} {
+      allow read: if true;  // 모든 사용자 읽기 가능
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // 제출 컬렉션
+    match /submissions/{submissionId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isOwner(resource.data.userId);
+      allow delete: if isAdmin();
+    }
+    
+    // 사용자 프로필
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create, update: if isOwner(userId);
+      allow delete: if isAdmin();
+    }
+    
+    // 시험 세션
+    match /examSessions/{sessionId} {
+      allow read, write: if isOwner(resource.data.userId);
+    }
+    
+    // 통계
+    match /statistics/{statId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}
